@@ -1,0 +1,20 @@
+{
+  "name": "echo-knowledge-scout",
+  "version": "1.0.0",
+  "description": "Daily autonomous knowledge scout — searches GitHub, HuggingFace, ArXiv, Reddit, RSS feeds for new AI/tech to integrate into Echo Prime",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create echo-knowledge-scout",
+    "db:migrate": "wrangler d1 execute echo-knowledge-scout --remote --file=schema.sql"
+  },
+  "dependencies": {
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250214.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^3.109.0"
+  }
+}

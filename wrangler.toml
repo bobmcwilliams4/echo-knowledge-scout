@@ -1,0 +1,40 @@
+name = "echo-knowledge-scout"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[vars]
+ENVIRONMENT = "production"
+SHARED_BRAIN_URL = "https://echo-shared-brain.bmcii1976.workers.dev"
+MEMORY_PRIME_URL = "https://echo-memory-prime.bmcii1976.workers.dev"
+KNOWLEDGE_FORGE_URL = "https://echo-knowledge-forge.bmcii1976.workers.dev"
+OMNISYNC_URL = "https://omniscient-sync.bmcii1976.workers.dev"
+
+# Daily scan at 6am UTC (midnight CST)
+[triggers]
+crons = ["0 6 * * *"]
+
+# D1 — will be created during deploy
+[[d1_databases]]
+binding = "DB"
+database_name = "echo-knowledge-scout"
+database_id = "0ad0a419-859c-49b1-816c-25a37c66121e"
+
+# KV — for caching scan results
+[[kv_namespaces]]
+binding = "CACHE"
+id = "ad44882577cd4cf98ef2139a8cc2daf0"
+
+# Service Bindings — Worker-to-Worker direct communication
+[[services]]
+binding = "SHARED_BRAIN_SVC"
+service = "echo-shared-brain"
+
+[[services]]
+binding = "KNOWLEDGE_FORGE_SVC"
+service = "echo-knowledge-forge"
+
+[[services]]
+binding = "OMNISYNC_SVC"
+service = "omniscient-sync"
