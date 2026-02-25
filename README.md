@@ -1,20 +1,29 @@
 # Echo Knowledge Scout
 
-A Cloudflare Worker that automatically scans 7 sources daily for new AI/tech developments and ingests them into a searchable knowledge base.
+A Cloudflare Worker that automatically scans GitHub, HuggingFace, ArXiv, Reddit, Hacker News, Product Hunt, and RSS feeds daily for new AI/tech developments. Discoveries are scored for relevance, deduplicated, and optionally ingested into downstream knowledge systems.
 
-## What It Does
+## How It Works
 
-Knowledge Scout runs on a cron schedule (daily at 6am UTC) and scans:
+Knowledge Scout runs on a daily cron (6am UTC) and:
 
-- **GitHub** — Trending repos, new releases
-- **HuggingFace** — New models and datasets
-- **ArXiv** — Recent AI/ML papers
-- **Reddit** — r/LocalLLaMA, r/MachineLearning, r/artificial
-- **Hacker News** — Top AI/tech stories
-- **RSS Feeds** — Curated tech blogs
-- **Product Hunt** — New AI tools and launches
+1. Queries each source with configurable search terms
+2. Scores discoveries by relevance (0.0–1.0)
+3. Deduplicates against previous finds
+4. Stores everything in D1
+5. Optionally ingests high-relevance items into external knowledge bases
 
-Each discovery is scored for relevance, categorized, and stored in D1. High-relevance items are automatically ingested into the broader knowledge system.
+You can also trigger scans manually via the API.
+
+```bash
+# Trigger a full scan
+curl -X POST https://your-worker.workers.dev/scan
+
+# Scan a single source
+curl -X POST https://your-worker.workers.dev/scan/github
+
+# Browse discoveries
+curl https://your-worker.workers.dev/discoveries?min_relevance=0.7&category=agent_framework
+```
 
 ## API Endpoints
 
@@ -23,14 +32,27 @@ Each discovery is scored for relevance, categorized, and stored in D1. High-rele
 | `GET` | `/` | Status and endpoint list |
 | `GET` | `/health` | Health check |
 | `GET` | `/discoveries` | List discoveries (filterable) |
-| `GET` | `/discoveries/:id` | Get single discovery |
+| `GET` | `/discoveries/:id` | Get a single discovery |
 | `GET` | `/runs` | List scan runs |
-| `GET` | `/stats` | Statistics and metrics |
+| `GET` | `/runs/:id` | Scan run details |
+| `GET` | `/stats` | Metrics and statistics |
 | `GET` | `/sources` | Source configuration |
-| `POST` | `/scan` | Trigger manual scan |
-| `POST` | `/scan/:source` | Scan a single source |
+| `POST` | `/scan` | Trigger full scan |
+| `POST` | `/scan/:source` | Trigger single source scan |
 | `POST` | `/ingest/:id` | Re-ingest a discovery |
-| `POST` | `/ingest/pending` | Ingest all pending items |
+| `POST` | `/ingest/pending` | Ingest all pending |
+
+## Sources
+
+| Source | What It Scans |
+|--------|--------------|
+| GitHub | Trending repos, new releases, topic searches |
+| HuggingFace | New models, datasets, spaces |
+| ArXiv | Papers in cs.AI, cs.CL, cs.LG |
+| Reddit | r/LocalLLaMA, r/MachineLearning, r/artificial |
+| Hacker News | Top stories matching AI/tech keywords |
+| Product Hunt | New AI/developer tool launches |
+| RSS | Custom feed list |
 
 ## Deploy Your Own
 
@@ -43,8 +65,10 @@ npm install
 npx wrangler d1 create echo-knowledge-scout
 
 # Update wrangler.toml with your database ID, then:
-npx wrangler d1 execute echo-knowledge-scout --remote --file=./schema.sql
-npx wrangler d1 execute echo-knowledge-scout --remote --file=./seed.sql
+npx wrangler d1 execute echo-knowledge-scout --remote --file=schema.sql
+
+# Seed default source configs
+npx wrangler d1 execute echo-knowledge-scout --remote --file=seed.sql
 
 # Deploy
 npx wrangler deploy
@@ -54,13 +78,13 @@ npx wrangler deploy
 
 - **Runtime**: Cloudflare Workers
 - **Framework**: Hono
-- **Database**: Cloudflare D1
+- **Database**: Cloudflare D1 (SQLite at the edge)
 - **Language**: TypeScript
 - **Scheduling**: Cloudflare Cron Triggers
 
 ## Part of Echo Omega Prime
 
-Knowledge Scout is the automated intelligence gathering layer of [Echo Omega Prime](https://github.com/bobmcwilliams4/Echo-Omega-Prime). It feeds discoveries into the Shared Brain and Knowledge Forge for cross-system access.
+Knowledge Scout is the intelligence gathering layer of [Echo Omega Prime](https://github.com/bobmcwilliams4/Echo-Omega-Prime). It can run standalone or feed into the larger system's Shared Brain and Knowledge Forge.
 
 ## Author
 
