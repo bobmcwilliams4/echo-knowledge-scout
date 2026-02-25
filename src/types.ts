@@ -9,6 +9,7 @@ export interface Env {
   OMNISYNC_URL: string;
   ECHO_API_KEY: string;
   GITHUB_TOKEN: string;
+  HF_TOKEN?: string;
   ENVIRONMENT: string;
   // Service bindings
   SHARED_BRAIN_SVC: Fetcher;

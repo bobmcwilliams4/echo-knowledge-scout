@@ -233,18 +233,33 @@ async function scanGitHub(env: Env): Promise<ScanResult> {
 // HUGGING FACE SCANNER
 // ============================================================================
 
-async function scanHuggingFace(_env: Env): Promise<ScanResult> {
+async function scanHuggingFace(env: Env): Promise<ScanResult> {
   const start = Date.now();
   const discoveries: RawDiscovery[] = [];
   const errors: string[] = [];
+
+  const hfHeadersAuth: Record<string, string> = { 'User-Agent': 'EchoKnowledgeScout/1.0' };
+  const hfHeadersNoAuth: Record<string, string> = { 'User-Agent': 'EchoKnowledgeScout/1.0' };
+  if (env.HF_TOKEN) {
+    hfHeadersAuth['Authorization'] = `Bearer ${env.HF_TOKEN}`;
+  }
+
+  // Helper: try with auth, fallback to no auth on 401
+  async function hfFetch(url: string): Promise<Response> {
+    const resp = await fetchWithRetry(url, { headers: hfHeadersAuth });
+    if (resp.status === 401 && env.HF_TOKEN) {
+      // Token invalid — retry without auth
+      return fetchWithRetry(url, { headers: hfHeadersNoAuth });
+    }
+    return resp;
+  }
 
   // Search trending models
   const modelQueries = ['agent', 'function-calling', 'tool-use', 'code', 'tts', 'whisper', 'mcp'];
   for (const q of modelQueries) {
     try {
-      const resp = await fetch(
-        `https://huggingface.co/api/models?search=${encodeURIComponent(q)}&sort=likes&direction=-1&limit=10`,
-        { headers: { 'User-Agent': 'EchoKnowledgeScout/1.0' } }
+      const resp = await hfFetch(
+        `https://huggingface.co/api/models?search=${encodeURIComponent(q)}&sort=likes&direction=-1&limit=10`
       );
       if (!resp.ok) { errors.push(`HF models "${q}": ${resp.status}`); continue; }
       const models = await resp.json() as Array<{
@@ -279,9 +294,8 @@ async function scanHuggingFace(_env: Env): Promise<ScanResult> {
   const spaceQueries = ['agent', 'mcp', 'autonomous', 'browser', 'voice'];
   for (const q of spaceQueries) {
     try {
-      const resp = await fetch(
-        `https://huggingface.co/api/spaces?search=${encodeURIComponent(q)}&sort=likes&direction=-1&limit=10`,
-        { headers: { 'User-Agent': 'EchoKnowledgeScout/1.0' } }
+      const resp = await hfFetch(
+        `https://huggingface.co/api/spaces?search=${encodeURIComponent(q)}&sort=likes&direction=-1&limit=10`
       );
       if (!resp.ok) continue;
       const spaces = await resp.json() as Array<{
@@ -508,18 +522,21 @@ async function scanRSS(_env: Env): Promise<ScanResult> {
 
   const feeds = [
     { url: 'https://blog.cloudflare.com/rss/', name: 'Cloudflare Blog' },
-    { url: 'https://openai.com/blog/rss.xml', name: 'OpenAI Blog' },
-    { url: 'https://blog.google/rss/', name: 'Google Blog' },
+    { url: 'https://openai.com/news/rss.xml', name: 'OpenAI Blog' },
+    { url: 'https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_research.xml', name: 'Anthropic Research' },
+    { url: 'https://blog.google/technology/ai/rss/', name: 'Google AI Blog' },
     { url: 'https://huggingface.co/blog/feed.xml', name: 'Hugging Face Blog' },
-    { url: 'https://blog.langchain.dev/rss', name: 'LangChain Blog' },
+    { url: 'https://blog.langchain.dev/rss/', name: 'LangChain Blog' },
     { url: 'https://www.latent.space/feed', name: 'Latent Space' },
     { url: 'https://simonwillison.net/atom/everything/', name: 'Simon Willison' },
     { url: 'https://lilianweng.github.io/index.xml', name: 'Lilian Weng (OpenAI)' },
+    { url: 'https://techcrunch.com/category/artificial-intelligence/feed/', name: 'TechCrunch AI' },
+    { url: 'https://bair.berkeley.edu/blog/feed.xml', name: 'Berkeley AI Research' },
   ];
 
   for (const feed of feeds) {
     try {
-      const resp = await fetch(feed.url, {
+      const resp = await fetchWithRetry(feed.url, {
         headers: { 'User-Agent': 'EchoKnowledgeScout/1.0' },
       });
       if (!resp.ok) { errors.push(`RSS ${feed.name}: ${resp.status}`); continue; }
@@ -684,4 +701,25 @@ function dedup(discoveries: RawDiscovery[]): RawDiscovery[] {
     seen.add(d.source_url);
     return true;
   });
+}
+
+async function fetchWithRetry(url: string, init?: RequestInit, maxRetries = 2): Promise<Response> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const resp = await fetch(url, { ...init, signal: AbortSignal.timeout(15000) });
+      if (resp.status === 429 && attempt < maxRetries) {
+        // Rate limited — back off exponentially
+        await sleep(2000 * (attempt + 1));
+        continue;
+      }
+      return resp;
+    } catch (e: unknown) {
+      lastError = e as Error;
+      if (attempt < maxRetries) {
+        await sleep(1000 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError || new Error(`fetchWithRetry failed for ${url}`);
 }
