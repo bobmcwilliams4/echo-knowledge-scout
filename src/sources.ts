@@ -243,7 +243,7 @@ async function scanHuggingFace(_env: Env): Promise<ScanResult> {
   for (const q of modelQueries) {
     try {
       const resp = await fetch(
-        `https://huggingface.co/api/models?search=${encodeURIComponent(q)}&sort=trending&limit=10`,
+        `https://huggingface.co/api/models?search=${encodeURIComponent(q)}&sort=likes&direction=-1&limit=10`,
         { headers: { 'User-Agent': 'EchoKnowledgeScout/1.0' } }
       );
       if (!resp.ok) { errors.push(`HF models "${q}": ${resp.status}`); continue; }
@@ -280,7 +280,7 @@ async function scanHuggingFace(_env: Env): Promise<ScanResult> {
   for (const q of spaceQueries) {
     try {
       const resp = await fetch(
-        `https://huggingface.co/api/spaces?search=${encodeURIComponent(q)}&sort=trending&limit=10`,
+        `https://huggingface.co/api/spaces?search=${encodeURIComponent(q)}&sort=likes&direction=-1&limit=10`,
         { headers: { 'User-Agent': 'EchoKnowledgeScout/1.0' } }
       );
       if (!resp.ok) continue;
@@ -508,14 +508,13 @@ async function scanRSS(_env: Env): Promise<ScanResult> {
 
   const feeds = [
     { url: 'https://blog.cloudflare.com/rss/', name: 'Cloudflare Blog' },
-    { url: 'https://openai.com/index/rss.xml', name: 'OpenAI Blog' },
-    { url: 'https://www.anthropic.com/research/rss.xml', name: 'Anthropic Research' },
-    { url: 'https://blog.google/technology/ai/rss/', name: 'Google AI Blog' },
+    { url: 'https://openai.com/blog/rss.xml', name: 'OpenAI Blog' },
+    { url: 'https://blog.google/rss/', name: 'Google Blog' },
     { url: 'https://huggingface.co/blog/feed.xml', name: 'Hugging Face Blog' },
-    { url: 'https://blog.langchain.dev/rss/', name: 'LangChain Blog' },
+    { url: 'https://blog.langchain.dev/rss', name: 'LangChain Blog' },
+    { url: 'https://www.latent.space/feed', name: 'Latent Space' },
     { url: 'https://simonwillison.net/atom/everything/', name: 'Simon Willison' },
     { url: 'https://lilianweng.github.io/index.xml', name: 'Lilian Weng (OpenAI)' },
-    { url: 'https://www.latent.space/feed', name: 'Latent Space' },
   ];
 
   for (const feed of feeds) {

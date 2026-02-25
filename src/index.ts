@@ -255,6 +255,46 @@ app.post('/scan/:source', async (c) => {
 // RE-INGEST — Push existing discoveries to brain/knowledge
 // ============================================================================
 
+// IMPORTANT: /ingest/pending MUST come before /ingest/:id to avoid route collision
+app.post('/ingest/pending', async (c) => {
+  const env = c.env;
+  const rows = await env.DB.prepare(
+    'SELECT * FROM discoveries WHERE ingested_to_brain = 0 ORDER BY relevance_score DESC LIMIT 100'
+  ).all();
+
+  if (!rows.results || rows.results.length === 0) {
+    return c.json({ message: 'No pending discoveries to ingest', total: 0 });
+  }
+
+  const discoveries: Discovery[] = (rows.results || []).map(row => ({
+    id: row.id as number,
+    source: row.source as SourceType,
+    source_url: row.source_url as string,
+    title: row.title as string,
+    summary: row.summary as string,
+    category: row.category as string as any,
+    relevance_score: row.relevance_score as number,
+    tags: safeJsonParse(row.tags as string, []),
+    raw_data: safeJsonParse(row.raw_data as string, {}),
+    ingested_to_brain: false,
+    ingested_to_knowledge: false,
+    ingested_to_omnisync: false,
+    discovered_at: row.discovered_at as string,
+    scan_run_id: row.scan_run_id as string,
+  }));
+
+  const result = await ingestBatch(discoveries, env);
+
+  // Batch update DB
+  for (const d of discoveries) {
+    await env.DB.prepare(`
+      UPDATE discoveries SET ingested_to_brain = 1, ingested_at = datetime('now') WHERE id = ?
+    `).bind(d.id).run();
+  }
+
+  return c.json(result);
+});
+
 app.post('/ingest/:id', async (c) => {
   const id = parseInt(c.req.param('id'));
   const env = c.env;
@@ -295,45 +335,6 @@ app.post('/ingest/:id', async (c) => {
     result.omnisync_ok > 0 ? 1 : 0,
     id
   ).run();
-
-  return c.json(result);
-});
-
-app.post('/ingest/pending', async (c) => {
-  const env = c.env;
-  const rows = await env.DB.prepare(
-    'SELECT * FROM discoveries WHERE ingested_to_brain = 0 ORDER BY relevance_score DESC LIMIT 100'
-  ).all();
-
-  if (!rows.results || rows.results.length === 0) {
-    return c.json({ message: 'No pending discoveries to ingest', total: 0 });
-  }
-
-  const discoveries: Discovery[] = (rows.results || []).map(row => ({
-    id: row.id as number,
-    source: row.source as SourceType,
-    source_url: row.source_url as string,
-    title: row.title as string,
-    summary: row.summary as string,
-    category: row.category as string as any,
-    relevance_score: row.relevance_score as number,
-    tags: safeJsonParse(row.tags as string, []),
-    raw_data: safeJsonParse(row.raw_data as string, {}),
-    ingested_to_brain: false,
-    ingested_to_knowledge: false,
-    ingested_to_omnisync: false,
-    discovered_at: row.discovered_at as string,
-    scan_run_id: row.scan_run_id as string,
-  }));
-
-  const result = await ingestBatch(discoveries, env);
-
-  // Batch update DB
-  for (const d of discoveries) {
-    await env.DB.prepare(`
-      UPDATE discoveries SET ingested_to_brain = 1, ingested_at = datetime('now') WHERE id = ?
-    `).bind(d.id).run();
-  }
 
   return c.json(result);
 });
@@ -417,7 +418,7 @@ async function processScanResults(
 
   // Ingest high-relevance discoveries
   const highRelevance = newDiscoveryObjects
-    .filter(d => d.relevance_score >= 0.3)
+    .filter(d => d.relevance_score >= 0.15)
     .sort((a, b) => b.relevance_score - a.relevance_score);
 
   let ingestResult = { total: 0, brain_ok: 0, knowledge_ok: 0, omnisync_ok: 0, errors: [] as string[] };
